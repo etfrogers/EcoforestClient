@@ -227,22 +227,7 @@ class DataChunk(Dataset):
 
 
 class DayData(Dataset):
-    def __init__(self, date: datetime.date):
-        self.date = date
-        use_cache = True
-        if use_cache:
-            try:
-                with open(self._cache_file) as file:
-                    contents = file.read()
-            except FileNotFoundError:
-                contents = self.get_data_from_server()
-                if contents and self.date != datetime.datetime.today().date():
-                    # do not cache today's data as it will change
-                    with open(self._cache_file, 'w') as file:
-                        file.write(contents)
-        else:
-            contents = self.get_data_from_server()
-        timestamps, full_data = self.process_file_data(contents)
+    def __init__(self, timestamps, full_data):
         super().__init__(timestamps, full_data)
 
         if EXPLORE_UNUSED_DATA:
@@ -336,26 +321,59 @@ class DayData(Dataset):
         plt.show()
         return [ax1, ax2]
 
-    @property
-    def date_str(self):
-        return self.date.strftime('%Y-%m-%d')
 
-    @property
-    def _cache_file(self):
+class EcoforestClient:
+
+    def __init__(self, server, port, serial_number, auth_key):
+        self.server = server
+        self.port = port
+        self.serial_number = serial_number
+        self.auth_key = auth_key
+
+    def get_history_for_date_range(self, dates: Tuple[datetime.date, datetime.date]):
+        return CompositeDataSet([self.get_history_for_date(date) for date in date_range(*dates)])
+
+    def get_history_for_month(self, year: int, month: int):
+        _, n_days = calendar.monthrange(year, month)
+        composite = self.get_history_for_date_range((datetime.date(year, month, 1),
+                                                     datetime.date(year, month, n_days)))
+        return MonthDataSet(composite.datasets)
+
+    def get_history_for_date(self, date: datetime.date):
+        use_cache = True
+        if use_cache:
+            cache_file = self._history_cache_file(date)
+            try:
+                with open(cache_file) as file:
+                    contents = file.read()
+            except FileNotFoundError:
+                contents = self.get_history_data_from_server(date)
+                if contents and date != datetime.datetime.today().date():
+                    # do not cache today's data as it will change
+                    with open(cache_file, 'w') as file:
+                        file.write(contents)
+        else:
+            contents = self.get_history_data_from_server(date)
+        timestamps, full_data = self.process_file_data(contents)
+        return DayData(timestamps, full_data)
+
+    @staticmethod
+    def date_str(date: datetime.date):
+        return date.strftime('%Y-%m-%d')
+
+    @staticmethod
+    def _history_cache_file(date: datetime.date):
         data_dir = pathlib.Path(os.path.dirname(inspect.getsourcefile(lambda: 0))) / 'data'
-        return data_dir / f'{self.date_str}.csv'
+        return data_dir / f'{EcoforestClient.date_str(date)}.csv'
 
-    def get_data_from_server(self):
-        with open('ecoforest_config.yml') as file:
-            config = yaml.safe_load(file)
+    def get_history_data_from_server(self, date: datetime.date):
         data_dir = 'historic'
-        filename = f'{self.date_str}_{config["serial_number"]}_1_historico.csv'
-        server = config["server"]
-        url = f'https://{server}:{config["port"]}/{data_dir}/{filename}'
+        filename = f'{self.date_str(date)}_{self.serial_number}_1_historico.csv'
+        url = f'https://{self.server}:{self.port}/{data_dir}/{filename}'
         ssl_verify = False  # os.path.abspath('easynet2.ecoforest.es.pem')
         response = requests.get(url,
                                 verify=ssl_verify,
-                                headers={'Authorization': f'Basic {config["auth_key"]}'},
+                                headers={'Authorization': f'Basic {self.auth_key}'},
                                 )
         try:
             response.raise_for_status()
@@ -434,9 +452,9 @@ class CompositeMeta(type):
 
 
 class CompositeDataSet(BaseDataset, metaclass=CompositeMeta):
-    def __init__(self, dates: Tuple[datetime.date, datetime.date]):
+    def __init__(self, datasets):
         super().__init__()
-        self.datasets: List[DayData] = [DayData(date)for date in date_range(*dates)]
+        self.datasets: List[DayData] = datasets
 
     @property
     def timestamps(self):
@@ -455,11 +473,6 @@ def date_range(start_date: datetime.date, end_date: datetime.date):
 
 
 class MonthDataSet(CompositeDataSet):
-    def __init__(self, year: int, month: int):
-        _, n_days = calendar.monthrange(year, month)
-        super().__init__((datetime.date(year, month, 1),
-                          datetime.date(year, month, n_days)))
-
     @functools.cached_property
     def days(self):
         return np.array([d.timestamps[0].day for d in self.datasets if not d.is_empty])
@@ -528,7 +541,11 @@ def main():
     #     data = DayData(datetime.date(year, month, day))
     #     data.plot()
     #     datasets.append(data)
-    dataset = MonthDataSet(year, month)
+    with open('ecoforest_config.yml') as file:
+        config = yaml.safe_load(file)
+
+    client = EcoforestClient(config['server'], config['port'], config['serial-number'], config['auth-key'])
+    dataset = client.get_history_for_month(year, month)
     # for ds in dataset.datasets:
     #     ds.plot()
 
