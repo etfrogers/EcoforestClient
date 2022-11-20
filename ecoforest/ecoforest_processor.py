@@ -165,7 +165,7 @@ STATUS_DATAPOINTS = [['ElectricalPower', 'e_elect', int, 81, 'W', True],
                      ['HeatingBufferOffset', 'offset_inercia_heat', float, 58, 'ºC', True],
                      ['HeatingOn', 'top_1', bool, 206, '', False],
                      ['HeatingDemand', 'top_1', bool, 249, '', False],
-                     ['DHWDemand', 'recirc_acs', bool, 211, '', False],
+                     ['DHWDemand', 'acs', bool, 208, '', False],
                      ]
 
 # pages of registers used, as extracted from informacion.js
