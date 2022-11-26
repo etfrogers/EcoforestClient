@@ -3,12 +3,15 @@ import functools
 from abc import abstractmethod
 from enum import Enum
 from functools import partial
-from typing import List
+from typing import List, Union, Collection
 
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.dates import DateFormatter
 
 from ecoforest.plotting import get_text_positions, text_plotter, stacked_bar, grouped_bar
+
+TIME_FORMAT = DateFormatter("%H:%M")
 
 TANK_OFFSET_TEMP = 5
 DHW_OFFSET_TEMP = 4
@@ -52,6 +55,9 @@ class BaseDataset:
     def data(self):
         raise NotImplementedError()
 
+    def __len__(self):
+        return len(self.timestamps)
+
     @property
     def length(self) -> datetime.timedelta:
         return self.timestamps[-1] - self.timestamps[0]
@@ -61,8 +67,8 @@ class BaseDataset:
         # 5 minute intervals, means 12 to an hour, so one 1kW at one point is 1/12 kWh
         return np.sum(series) / 12
 
-    def heating_power_of_type(self, type_: 'ChunkClass'):
-        return sum([c.total_heating for c in self.chunks() if c.type is type_])
+    def heating_power_of_type(self, types: 'ChunkClass'):
+        return sum([c.total_heating for c in self.chunks(types)])
 
     @property
     def total_consumption(self):
@@ -72,25 +78,34 @@ class BaseDataset:
     def total_heating(self):
         return self.total_power(self.heating)
 
-    def cop(self, type_: 'ChunkClass' = None):
-        if type_ is None:
+    def cop(self, types: Union['ChunkClass', Collection['ChunkClass']] = None):
+        if types is None:
             return self.heating / self.consumption
         else:
-            chunks = [chunk for chunk in self.chunks() if chunk.type == type_]
+            chunks = self.chunks(types)
             if chunks:
                 return np.average([chunk.mean_cop() for chunk in chunks],
                                   weights=[chunk.length for chunk in chunks])
             else:
                 return 0.0
 
-    def mean_cop(self, type_: 'ChunkClass' = None):
+    def mean_cop(self, types: 'ChunkClass' = None):
         if self.total_heating == 0:
             return 0
         else:
-            return np.nanmean(self.cop(type_))
+            return np.nanmean(self.cop(types))
 
     @functools.cache
-    def chunks(self) -> list['DataChunk']:
+    def chunks(self, types: Union['ChunkClass', Collection['ChunkClass']] = None) -> list['DataChunk']:
+        chunks = self._chunk_list()
+        if isinstance(types, ChunkClass):
+            types = (types,)
+        if types is not None:
+            chunks = list(filter(lambda c: c.type in types, chunks))
+        return chunks
+
+    @functools.cache
+    def _chunk_list(self) -> list['DataChunk']:
         return list(self._chunk_generator())
 
     def _chunk_generator(self):
@@ -98,8 +113,10 @@ class BaseDataset:
         switches = np.diff(is_on)
         starts = np.nonzero(switches == 1)[0]
         ends = np.nonzero(switches == -1)[0]
-        # line below will fail if the heat pump is on over midnight.
-        # If this occurs a special case will be needed
+        if is_on[0]:
+            starts.append(0)
+        if is_on[-1]:
+            ends.append(is_on.size)
         assert starts.size == ends.size
         # returns inclusive inds (first non element and last nonzero element)
         for start_ind, end_ind in zip(starts + 1, ends):
@@ -108,6 +125,14 @@ class BaseDataset:
     @property
     def is_empty(self):
         return len(self.timestamps) == 0
+
+    def get_power_series(self, types):
+        power = np.zeros_like(self.timestamps)
+        for chunk in self.chunks(types):
+            # [0][0] at end extracts first occurrence along first axis
+            start_ind = np.where(chunk.timestamps[0] == self.timestamps)[0][0]
+            power[start_ind:start_ind+len(chunk)] += chunk.consumption
+        return power
 
 
 class Dataset(BaseDataset):
@@ -144,19 +169,19 @@ class ChunkClass(Enum):
 
     @classmethod
     def solar_types(cls):
-        return {ChunkClass.SOLAR_HEATING, ChunkClass.SOLAR_DHW, ChunkClass.SOLAR_COMBINED}
+        return frozenset({ChunkClass.SOLAR_HEATING, ChunkClass.SOLAR_DHW, ChunkClass.SOLAR_COMBINED})
 
     @classmethod
     def heating_types(cls):
-        return {ChunkClass.SOLAR_HEATING, ChunkClass.HEATING}
+        return frozenset({ChunkClass.SOLAR_HEATING, ChunkClass.HEATING})
 
     @classmethod
     def dhw_types(cls):
-        return {ChunkClass.DHW, ChunkClass.SOLAR_DHW}
+        return frozenset({ChunkClass.DHW, ChunkClass.SOLAR_DHW})
 
     @classmethod
     def legionnaires_types(cls):
-        return {ChunkClass.LEGIONNAIRES, ChunkClass.LEGIONNAIRES_COMBINED}
+        return frozenset({ChunkClass.LEGIONNAIRES, ChunkClass.LEGIONNAIRES_COMBINED})
 
 
 class ChunkTypeError(Exception):
@@ -350,7 +375,9 @@ class MonthDataSet(CompositeDataSet):
             self.days,
             # [d.total_heating for d in self.datasets],
             [d.heating_power_of_type(ChunkClass.DHW) for d in self.datasets if not d.is_empty],
+            [d.heating_power_of_type(ChunkClass.HEATING) for d in self.datasets if not d.is_empty],
             [d.heating_power_of_type(ChunkClass.SOLAR_DHW) for d in self.datasets if not d.is_empty],
+            [d.heating_power_of_type(ChunkClass.SOLAR_HEATING) for d in self.datasets if not d.is_empty],
             [d.heating_power_of_type(ChunkClass.LEGIONNAIRES) for d in self.datasets if not d.is_empty],
             # [d.total_consumption for d in self.datasets],
             )
@@ -358,10 +385,13 @@ class MonthDataSet(CompositeDataSet):
         grouped_bar(self.days,
                     # [-d.mean_cop() for d in self.datasets],
                     [-d.mean_cop(ChunkClass.DHW) for d in self.datasets if not d.is_empty],
+                    [-d.mean_cop(ChunkClass.HEATING) for d in self.datasets if not d.is_empty],
                     [-d.mean_cop(ChunkClass.SOLAR_DHW) for d in self.datasets if not d.is_empty],
+                    [-d.mean_cop(ChunkClass.SOLAR_HEATING) for d in self.datasets if not d.is_empty],
                     [-d.mean_cop(ChunkClass.LEGIONNAIRES) for d in self.datasets if not d.is_empty],
                     # [d.total_consumption for d in self.datasets],
                     colors=colors,
                     )
+        plt.legend(['DHW', 'Heating', 'Solar DHW', 'Solar Heating', 'Legionnaires'])
         plt.axhline(y=0.0, color='k', linestyle='-')
         plt.show()

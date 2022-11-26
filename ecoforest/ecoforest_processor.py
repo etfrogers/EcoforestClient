@@ -9,12 +9,10 @@ import requests
 
 import numpy as np
 import yaml
-from matplotlib.dates import DateFormatter
 
-from ecoforest.history_dataset import ChunkClass, DayData, CompositeDataSet, MonthDataSet
+from ecoforest.history_dataset import DayData, CompositeDataSet, MonthDataSet
 
 CSV_DATE_FORMAT = '%Y/%m/%d %H:%M:%S'
-TIME_FORMAT = DateFormatter("%H:%M")
 
 
 class EcoforestClient:
@@ -100,7 +98,7 @@ class EcoforestClient:
             data = np.array(data) / 10
         else:
             data = np.zeros((0, 30))  # each file has 30 columns, here we set n_rows to 0
-        return timestamps, data
+        return np.array(timestamps), data
 
     def _get_register_values(self, first_register: int, number_of_registers: int, type_):
         endpoint = 'recepcion_datos_4.cgi'
@@ -194,14 +192,14 @@ def main():
         config = yaml.safe_load(file)
 
     client = EcoforestClient(config['server'], config['port'], config['serial-number'], config['auth-key'])
-    client.get_current_status()
+    # client.get_current_status()
 
-    # dataset = client.get_history_for_month(year, month)
+    dataset = client.get_history_for_month(year, month)
     # print(dataset.mean_cop())
     # print(dataset.mean_cop(ChunkClass.DHW))
     # print([c.type for c in dataset.chunks()])
     # print([d.mean_cop() for d in dataset.datasets])
-    # dataset.plot_bar_chart()
+    dataset.plot_bar_chart()
 
 
 if __name__ == '__main__':
