@@ -114,9 +114,9 @@ class BaseDataset:
         starts = np.nonzero(switches == 1)[0]
         ends = np.nonzero(switches == -1)[0]
         if is_on[0]:
-            starts.append(0)
+            starts = np.insert(starts, 0, 0)
         if is_on[-1]:
-            ends.append(is_on.size)
+            ends = np.append(ends, is_on.size)
         assert starts.size == ends.size
         # returns inclusive inds (first non element and last nonzero element)
         for start_ind, end_ind in zip(starts + 1, ends):
@@ -127,7 +127,7 @@ class BaseDataset:
         return len(self.timestamps) == 0
 
     def get_power_series(self, types):
-        power = np.zeros_like(self.timestamps)
+        power = np.zeros_like(self.timestamps, dtype=np.float64)
         for chunk in self.chunks(types):
             # [0][0] at end extracts first occurrence along first axis
             start_ind = np.where(chunk.timestamps[0] == self.timestamps)[0][0]
