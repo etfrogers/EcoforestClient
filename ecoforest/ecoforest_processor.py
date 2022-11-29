@@ -57,7 +57,7 @@ class EcoforestClient:
 
     @staticmethod
     def _history_cache_file(date: datetime.date):
-        data_dir = pathlib.Path(os.path.dirname(inspect.getsourcefile(lambda: 0))) / 'data'
+        data_dir = pathlib.Path('cache/ecoforest')
         return data_dir / f'{EcoforestClient.date_str(date)}.csv'
 
     def api_request(self, endpoint, data=None, **kwargs):
