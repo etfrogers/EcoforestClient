@@ -67,8 +67,11 @@ class BaseDataset:
         # 5 minute intervals, means 12 to an hour, so one 1kW at one point is 1/12 kWh
         return np.sum(series) / 12
 
-    def heating_power_of_type(self, types: 'ChunkClass'):
+    def heating_energy_of_type(self, types: 'ChunkClass'):
         return sum([c.total_heating for c in self.chunks(types)])
+
+    def consumed_energy_of_type(self, types: 'ChunkClass'):
+        return sum([c.total_consumption for c in self.chunks(types)])
 
     @property
     def total_consumption(self):
@@ -180,6 +183,10 @@ class ChunkClass(Enum):
         return frozenset({ChunkClass.DHW, ChunkClass.SOLAR_DHW})
 
     @classmethod
+    def combined_types(cls):
+        return frozenset({ChunkClass.COMBINED, ChunkClass.SOLAR_COMBINED, ChunkClass.LEGIONNAIRES_COMBINED})
+
+    @classmethod
     def legionnaires_types(cls):
         return frozenset({ChunkClass.LEGIONNAIRES, ChunkClass.LEGIONNAIRES_COMBINED})
 
@@ -237,7 +244,7 @@ class DataChunk(Dataset):
             assert not dhw_increased
             return ChunkClass.HEATING
         else:
-            print(dhw_diff, heating_diff)
+            # print(dhw_diff, heating_diff)
             return ChunkClass.UNKNOWN
 
 
@@ -374,11 +381,11 @@ class MonthDataSet(CompositeDataSet):
         power_bars = stacked_bar(
             self.days,
             # [d.total_heating for d in self.datasets],
-            [d.heating_power_of_type(ChunkClass.DHW) for d in self.datasets if not d.is_empty],
-            [d.heating_power_of_type(ChunkClass.HEATING) for d in self.datasets if not d.is_empty],
-            [d.heating_power_of_type(ChunkClass.SOLAR_DHW) for d in self.datasets if not d.is_empty],
-            [d.heating_power_of_type(ChunkClass.SOLAR_HEATING) for d in self.datasets if not d.is_empty],
-            [d.heating_power_of_type(ChunkClass.LEGIONNAIRES) for d in self.datasets if not d.is_empty],
+            [d.heating_energy_of_type(ChunkClass.DHW) for d in self.datasets if not d.is_empty],
+            [d.heating_energy_of_type(ChunkClass.HEATING) for d in self.datasets if not d.is_empty],
+            [d.heating_energy_of_type(ChunkClass.SOLAR_DHW) for d in self.datasets if not d.is_empty],
+            [d.heating_energy_of_type(ChunkClass.SOLAR_HEATING) for d in self.datasets if not d.is_empty],
+            [d.heating_energy_of_type(ChunkClass.LEGIONNAIRES) for d in self.datasets if not d.is_empty],
             # [d.total_consumption for d in self.datasets],
             )
         colors = [bars.patches[0]._facecolor for bars in power_bars]
