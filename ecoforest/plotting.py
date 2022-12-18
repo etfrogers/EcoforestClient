@@ -58,17 +58,18 @@ def grouped_bar(x, *args, total_width: float = 0.9, colors=None):
                 **kwargs)
 
 
-def stacked_bar(x, *args, total_width: float = 0.9):
+def stacked_bar(x, *args, total_width: float = 0.9, ax=None, colors=None, hatch=None, **kwargs):
+    if ax is None:
+        ax = plt
     n_bars = len(args)
     bottom = 0
     bars_sets = []
     for i in range(n_bars):
         if i >= 1:
-            bottom = args[i-1]
-        bars_sets.append(plt.bar(x,
-                                 args[i],
-                                 total_width,
-                                 bottom=bottom,
-                                 )
-                         )
+            bottom = sum(args[:i])
+        if colors is not None:
+            kwargs['color'] = colors[i % len(colors)]
+        if hatch is not None:
+            kwargs['hatch'] = hatch[i % len(hatch)]
+        bars_sets.append(ax.bar(x, args[i], total_width, bottom=bottom, **kwargs))
     return bars_sets
