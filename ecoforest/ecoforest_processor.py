@@ -3,12 +3,14 @@ import datetime
 import inspect
 import os
 import pathlib
+import warnings
 from typing import Tuple
 
 import requests
 
 import numpy as np
 import yaml
+from urllib3.exceptions import InsecureRequestWarning
 
 from ecoforest.history_dataset import DayData, CompositeDataSet, MonthDataSet
 
@@ -65,11 +67,13 @@ class EcoforestClient:
         ssl_verify = False  # os.path.abspath('easynet2.ecoforest.es.pem')
         standard_args = {'verify': ssl_verify,
                          'headers': {'Authorization': f'Basic {self.auth_key}'}}
-        if data is None:
-            response = requests.get(url, **standard_args, **kwargs)
-        else:
-            response = requests.post(url, data=data, **standard_args, **kwargs)
-        return response
+        with warnings.catch_warnings():
+            warnings.simplefilter(category=InsecureRequestWarning, action="ignore")
+            if data is None:
+                response = requests.get(url, **standard_args, **kwargs)
+            else:
+                response = requests.post(url, data=data, **standard_args, **kwargs)
+            return response
 
     def get_history_data_from_server(self, date: datetime.date):
         data_dir = 'historic'
