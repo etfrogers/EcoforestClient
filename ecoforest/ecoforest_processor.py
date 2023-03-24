@@ -184,15 +184,15 @@ def date_range(start_date: datetime.date, end_date: datetime.date):
 
 
 def main():
-    year = 2022
-    month = 11
+    year = 2023
+    month = 2
     # day = 10
     # datasets = []
     # for day in range(15, 21):
     #     data = DayData(datetime.date(year, month, day))
     #     data.plot()
     #     datasets.append(data)
-    with open('ecoforest_config.yml') as file:
+    with open('EcoforestClient/ecoforest_config.yml') as file:
         config = yaml.safe_load(file)
 
     client = EcoforestClient(config['server'], config['port'], config['serial-number'], config['auth-key'])
