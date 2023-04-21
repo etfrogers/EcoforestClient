@@ -188,7 +188,7 @@ class ChunkClass(Enum):
 
     @classmethod
     def legionnaires_types(cls):
-        return frozenset({ChunkClass.LEGIONNAIRES, ChunkClass.LEGIONNAIRES_COMBINED})
+        return frozenset({ChunkClass.LEGIONNAIRES})
 
 
 class ChunkTypeError(Exception):
