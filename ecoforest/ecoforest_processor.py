@@ -163,9 +163,10 @@ class EcoforestClient:
         return status
 
 
-# Our name, EF Name, type, register index, 'unit', signed, index in page, dir (first_register), num (num_reg)
+# Our name, EF Name, type, register index, 'unit', signed,
 STATUS_DATAPOINTS = [['ElectricalPower', 'e_elect', int, 81, 'W', True],
                      ['DHWActualTemp', 'temp_acum_acs', float, 8, 'ºC', True],
+                     ['DWHSetpoint', 'consigna_acs', float, 214, 'ºC', True],
                      ['OutsideTemp', 'temp_exterior', float, 11, 'ºC', True],
                      ['HeatingBufferSetpoint', 'set_inercia_heat', float, 215, 'ºC', True],
                      ['HeatingBufferActualTemp', 'temp_dep_heat', float, 200, 'ºC', True],
