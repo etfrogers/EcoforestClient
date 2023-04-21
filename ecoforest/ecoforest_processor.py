@@ -1,7 +1,5 @@
 import calendar
 import datetime
-import inspect
-import os
 import pathlib
 import warnings
 from typing import Tuple
@@ -18,13 +16,14 @@ CSV_DATE_FORMAT = '%Y/%m/%d %H:%M:%S'
 
 
 class EcoforestClient:
-    def __init__(self, server, port, serial_number, auth_key):
+    def __init__(self, server, port, serial_number, auth_key, timezone=None):
         self.server = server
         self.port = port
         self.serial_number = serial_number
         self.auth_key = auth_key
         self._register_values = {}
         self._status = {}
+        self.timezone = timezone
 
     def get_history_for_date_range(self, dates: Tuple[datetime.date, datetime.date]):
         return CompositeDataSet([self.get_history_for_date(date) for date in date_range(*dates)])
@@ -50,7 +49,7 @@ class EcoforestClient:
                         file.write(contents)
         else:
             contents = self.get_history_data_from_server(date)
-        timestamps, full_data = self.process_file_data(contents)
+        timestamps, full_data = self.process_file_data(contents, self.timezone)
         return DayData(timestamps, full_data)
 
     @staticmethod
@@ -89,14 +88,18 @@ class EcoforestClient:
         return response.text
 
     @staticmethod
-    def process_file_data(contents):
+    def process_file_data(contents, timezone=None):
         headers, *lines = contents.split('\n')
         timestamps = []
         data = []
         for line in lines:
             if line:
                 _, timestamp, *entry = line.split(';')[:-1]
-                timestamps.append(datetime.datetime.strptime(timestamp, CSV_DATE_FORMAT))
+                time = datetime.datetime.strptime(timestamp, CSV_DATE_FORMAT)
+                time = time.replace(tzinfo=timezone)
+                # time = time.replace(tzinfo=zoneinfo.ZoneInfo('UTC'))
+                # time = time.astimezone(timezone)
+                timestamps.append(time)
                 data.append([float(val) for val in entry])
         if data:
             data = np.array(data) / 10
