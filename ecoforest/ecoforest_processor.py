@@ -107,19 +107,21 @@ class EcoforestClient:
             data = np.zeros((0, 30))  # each file has 30 columns, here we set n_rows to 0
         return np.array(timestamps), data
 
-    def _get_register_values(self, first_register: int, number_of_registers: int, type_):
+    def _get_register_values(self, first_register: int, number_of_registers: int, type_: type):
         endpoint = 'recepcion_datos_4.cgi'
         action = 2001 if type_ is bool else 2002
         data = {"idOperacion": action, 'dir': first_register, 'num': number_of_registers}
         response = self.api_request(endpoint, data=data)
         data = response.text
-        status, data, null = data.split("\n")
+        status, data, *null = data.split("\n")
         msg, error_code = status.split("=")
         if type_ is bool:
             assert msg == 'error_geo_get_bit'
         else:
             assert msg == 'error_geo_get_reg'
-        assert error_code == '0'
+        if error_code != '0':
+            raise RuntimeError(f'Error getting Ecoforest register (index: {first_register}, '
+                               f'length:{number_of_registers}, type: {type_}) - Error code: {error_code}')
         dir, num, *binary_data = data.split("&")
         assert dir == f'dir={first_register}'
         assert num == f'num={number_of_registers}'
